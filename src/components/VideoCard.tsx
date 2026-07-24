@@ -80,15 +80,23 @@ export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
           {video.title}
         </h3>
 
-        {/* Channel */}
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center">
+        {/* Channel — clickable, opens channel page in new tab */}
+        <a
+          href={`https://www.youtube.com/channel/${video.channelId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-2 group/channel"
+        >
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center transition-all duration-300 group-hover/channel:from-blue-500/50 group-hover/channel:to-purple-500/50">
             <span className="text-xs font-bold text-white/60">
               {video.channelTitle.charAt(0).toUpperCase()}
             </span>
           </div>
-          <span className="text-xs text-white/50 truncate">{video.channelTitle}</span>
-        </div>
+          <span className="text-xs text-white/50 truncate group-hover/channel:text-white/80 transition-colors duration-200">
+            {video.channelTitle}
+          </span>
+        </a>
 
         {/* Stats Row */}
         <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">

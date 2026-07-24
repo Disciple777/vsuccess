@@ -20,6 +20,7 @@ import {
   Film,
   Smartphone,
   Monitor,
+  Users,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
@@ -78,6 +79,7 @@ export default function Home() {
   const [videoType, setVideoType] = useState<VideoType>("all");
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [apiKey, setApiKey] = useState("");
+  const [maxSubscribers, setMaxSubscribers] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,6 +113,9 @@ export default function Home() {
       if (apiKey.trim()) {
         params.set("apiKey", apiKey.trim());
       }
+      if (maxSubscribers.trim()) {
+        params.set("subscriberLimit", maxSubscribers.trim());
+      }
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
@@ -141,7 +146,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [niche, interval, videoType, platform, apiKey]);
+  }, [niche, interval, videoType, platform, apiKey, maxSubscribers]);
 
   const handleLoadMore = useCallback(async () => {
     if (!nextPageToken || loadingMore) return;
@@ -158,6 +163,9 @@ export default function Home() {
       });
       if (apiKey.trim()) {
         params.set("apiKey", apiKey.trim());
+      }
+      if (maxSubscribers.trim()) {
+        params.set("subscriberLimit", maxSubscribers.trim());
       }
 
       const controller = new AbortController();
@@ -187,7 +195,7 @@ export default function Home() {
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos]);
+  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos, maxSubscribers]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
@@ -436,6 +444,35 @@ export default function Home() {
                     );
                   })}
                 </div>
+              </div>
+
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
+
+              {/* Subscriber Limit Filter */}
+              <div className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-white/30 font-medium hidden sm:block">Max Subs</span>
+                  <input
+                    type="number"
+                    value={maxSubscribers}
+                    onChange={(e) => setMaxSubscribers(e.target.value)}
+                    placeholder="All"
+                    min="0"
+                    className="w-20 px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] 
+                             text-xs text-white/70 placeholder-white/30 outline-none
+                             focus:border-white/[0.15] focus:bg-white/[0.06] transition-all duration-200
+                             [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+                {maxSubscribers.trim() && (
+                  <button
+                    onClick={() => setMaxSubscribers("")}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             </div>
           </div>

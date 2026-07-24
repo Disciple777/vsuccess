@@ -8,6 +8,8 @@ export async function GET(request: NextRequest) {
   const videoType = searchParams.get("videoType") || "all";
   const apiKey = searchParams.get("apiKey") || process.env.YOUTUBE_API_KEY || "";
   const pageToken = searchParams.get("pageToken") || undefined;
+  const subscriberLimitParam = searchParams.get("subscriberLimit");
+  const subscriberLimit = subscriberLimitParam ? parseInt(subscriberLimitParam, 10) : undefined;
 
   if (!niche) {
     return NextResponse.json(
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await searchViralVideos(niche, interval, 20, apiKey, videoType, pageToken);
+    const result = await searchViralVideos(niche, interval, 20, apiKey, videoType, pageToken, subscriberLimit);
     return NextResponse.json({
       niche,
       interval,

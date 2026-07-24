@@ -11,6 +11,14 @@ export interface YouTubeVideo {
   commentCount: number;
   engagementRate: number;
   url: string;
+  subscriberCount: number;
+}
+
+export interface YouTubeChannelItem {
+  id: string;
+  statistics: {
+    subscriberCount?: string;
+  };
 }
 
 interface YouTubeSearchItem {
@@ -73,7 +81,8 @@ export async function searchViralVideos(
   maxResults: number = 20,
   apiKey: string,
   videoType: string = "all",
-  pageToken?: string
+  pageToken?: string,
+  subscriberLimit?: number
 ): Promise<{ videos: YouTubeVideo[]; nextPageToken?: string }> {
   const publishedAfter = getPublishedAfter(interval);
 
@@ -127,8 +136,8 @@ export async function searchViralVideos(
   const statsItems: YouTubeVideoItem[] = statsData.items || [];
   const statsMap = new Map(statsItems.map((item) => [item.id, item.statistics]));
 
-  // Step 3: Merge data and sort by view count
-  const videos: YouTubeVideo[] = searchItems
+  // Step 3: Build initial videos array with stats
+  let videos: YouTubeVideo[] = searchItems
     .map((item) => {
       const stats = statsMap.get(item.id.videoId);
       const viewCount = parseInt(stats?.viewCount || "0", 10);
@@ -148,11 +157,43 @@ export async function searchViralVideos(
         commentCount,
         engagementRate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
         url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+        subscriberCount: 0, // temporary, will fetch below
       };
     })
-    .filter((v) => v.viewCount > 0)
-    .sort((a, b) => b.viewCount - a.viewCount)
-    .slice(0, maxResults);
+    .filter((v) => v.viewCount > 0);
+
+  // Step 4: Fetch subscriber counts for each unique channel
+  const uniqueChannelIds = [...new Set(videos.map((v) => v.channelId))];
+  if (uniqueChannelIds.length > 0) {
+    const channelParams: Record<string, string> = {
+      part: "statistics",
+      id: uniqueChannelIds.join(","),
+    };
+    try {
+      const channelData = await fetchFromYouTube("channels", channelParams, apiKey);
+      const subscriberMap: Map<string, number> = new Map(
+        (channelData.items || []).map((item: YouTubeChannelItem) => [
+          item.id,
+          parseInt(item.statistics?.subscriberCount || "0", 10),
+        ] as [string, number])
+      );
+      videos = videos.map((v) => ({
+        ...v,
+        subscriberCount: subscriberMap.get(v.channelId) || 0,
+      }));
+    } catch {
+      // If channel fetch fails, continue with subscriberCount = 0
+      // This is a non-critical enrichment step
+    }
+  }
+
+  // Step 5: Filter by subscriber limit (if set)
+  if (subscriberLimit && subscriberLimit > 0) {
+    videos = videos.filter((v) => v.subscriberCount <= subscriberLimit && v.subscriberCount > 0);
+  }
+
+  // Step 6: Sort by view count and limit results
+  videos = videos.sort((a, b) => b.viewCount - a.viewCount).slice(0, maxResults);
 
   return { videos, nextPageToken };
 }
