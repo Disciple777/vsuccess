@@ -5,7 +5,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const niche = searchParams.get("niche")?.trim();
   const interval = searchParams.get("interval") || "7d";
+  const videoType = searchParams.get("videoType") || "all";
   const apiKey = searchParams.get("apiKey") || process.env.YOUTUBE_API_KEY || "";
+  const pageToken = searchParams.get("pageToken") || undefined;
 
   if (!niche) {
     return NextResponse.json(
@@ -25,12 +27,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const videos = await searchViralVideos(niche, interval, 20, apiKey);
+    const result = await searchViralVideos(niche, interval, 20, apiKey, videoType, pageToken);
     return NextResponse.json({
       niche,
       interval,
-      count: videos.length,
-      videos,
+      videoType,
+      count: result.videos.length,
+      videos: result.videos,
+      nextPageToken: result.nextPageToken,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

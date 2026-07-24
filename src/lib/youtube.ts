@@ -71,22 +71,49 @@ export async function searchViralVideos(
   niche: string,
   interval: string = "7d",
   maxResults: number = 20,
-  apiKey: string
-): Promise<YouTubeVideo[]> {
-  // Step 1: Search for videos by keyword and date
-  const searchParams: Record<string, string> = {
+  apiKey: string,
+  videoType: string = "all",
+  pageToken?: string
+): Promise<{ videos: YouTubeVideo[]; nextPageToken?: string }> {
+  const publishedAfter = getPublishedAfter(interval);
+
+  // Step 1: Search for videos by keyword, date, and video type
+  const baseSearchParams: Record<string, string> = {
     part: "snippet",
     q: niche,
     type: "video",
     maxResults: "50",
-    publishedAfter: getPublishedAfter(interval),
+    publishedAfter,
     relevanceLanguage: "en",
   };
 
-  const searchData = await fetchFromYouTube("search", searchParams, apiKey);
-  const searchItems: YouTubeSearchItem[] = searchData.items || [];
+  // Add pageToken for pagination (only for single-search types)
+  if (pageToken) {
+    baseSearchParams.pageToken = pageToken;
+  }
 
-  if (searchItems.length === 0) return [];
+  let searchItems: YouTubeSearchItem[] = [];
+  let nextPageToken: string | undefined;
+
+  if (videoType === "short") {
+    const data = await fetchFromYouTube("search", { ...baseSearchParams, videoDuration: "short" }, apiKey);
+    searchItems = data.items || [];
+    nextPageToken = data.nextPageToken;
+  } else if (videoType === "long") {
+    // Long form: pagination not supported for dual search
+    const [mediumData, longData] = await Promise.all([
+      fetchFromYouTube("search", { ...baseSearchParams, videoDuration: "medium", maxResults: "25" }, apiKey),
+      fetchFromYouTube("search", { ...baseSearchParams, videoDuration: "long", maxResults: "25" }, apiKey),
+    ]);
+    searchItems = [...(mediumData.items || []), ...(longData.items || [])];
+    // No pagination for dual search
+  } else {
+    const data = await fetchFromYouTube("search", baseSearchParams, apiKey);
+    searchItems = data.items || [];
+    nextPageToken = data.nextPageToken;
+  }
+
+  if (searchItems.length === 0) return { videos: [] };
 
   // Step 2: Get video IDs and fetch statistics
   const videoIds = searchItems.map((item) => item.id.videoId).filter(Boolean);
@@ -123,11 +150,11 @@ export async function searchViralVideos(
         url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
       };
     })
-    .filter((v) => v.viewCount > 0) // Filter out videos with no views
-    .sort((a, b) => b.viewCount - a.viewCount) // Sort by views descending
+    .filter((v) => v.viewCount > 0)
+    .sort((a, b) => b.viewCount - a.viewCount)
     .slice(0, maxResults);
 
-  return videos;
+  return { videos, nextPageToken };
 }
 
 export function getEngagementLabel(rate: number): string {

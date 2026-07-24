@@ -17,24 +17,36 @@ import {
   Lightbulb,
   Globe,
   Key,
+  Film,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
+import VideoPlayerModal from "@/components/VideoPlayerModal";
 import type { YouTubeVideo } from "@/lib/youtube";
 import { formatCount } from "@/lib/youtube";
 
 type Interval = "24h" | "7d" | "30d";
 type Platform = "youtube" | "tiktok" | "instagram";
+type VideoType = "all" | "short" | "long";
 
 interface ApiResponse {
   niche: string;
   interval: string;
   count: number;
   videos: YouTubeVideo[];
+  nextPageToken?: string;
   generatedAt: string;
   error?: string;
   message?: string;
   details?: string;
 }
+
+const VIDEO_TYPES: { value: VideoType; label: string; icon: typeof Smartphone; description: string }[] = [
+  { value: "all", label: "All Types", icon: Film, description: "All video durations" },
+  { value: "short", label: "Shorts", icon: Smartphone, description: "Videos under 4 minutes" },
+  { value: "long", label: "Long Form", icon: Monitor, description: "Videos over 4 minutes" },
+];
 
 const INTERVALS: { value: Interval; label: string; icon: typeof Clock }[] = [
   { value: "24h", label: "Last 24 Hours", icon: Zap },
@@ -63,6 +75,7 @@ const EXAMPLE_NICHES = [
 export default function Home() {
   const [niche, setNiche] = useState("");
   const [interval, setInterval] = useState<Interval>("7d");
+  const [videoType, setVideoType] = useState<VideoType>("all");
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -71,6 +84,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
   const [totalViews, setTotalViews] = useState(0);
+  const [playingVideo, setPlayingVideo] = useState<YouTubeVideo | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = useCallback(async () => {
@@ -89,6 +105,7 @@ export default function Home() {
       const params = new URLSearchParams({
         niche: trimmedNiche,
         interval,
+        videoType,
         platform,
       });
       if (apiKey.trim()) {
@@ -110,6 +127,7 @@ export default function Home() {
 
       setVideos(data.videos || []);
       setSearched(true);
+      setNextPageToken(data.nextPageToken);
       setTotalViews(
         (data.videos || []).reduce((sum, v) => sum + v.viewCount, 0)
       );
@@ -123,7 +141,53 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [niche, interval, platform, apiKey]);
+  }, [niche, interval, videoType, platform, apiKey]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!nextPageToken || loadingMore) return;
+
+    setLoadingMore(true);
+
+    try {
+      const params = new URLSearchParams({
+        niche: niche.trim(),
+        interval,
+        videoType,
+        platform,
+        pageToken: nextPageToken,
+      });
+      if (apiKey.trim()) {
+        params.set("apiKey", apiKey.trim());
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      const res = await fetch(`/api/videos?${params}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data: ApiResponse = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.details || data.error || data.message || "Failed to load more videos");
+      }
+
+      const newVideos = data.videos || [];
+
+      // Deduplicate by video ID
+      const existingIds = new Set(videos.map((v) => v.id));
+      const uniqueNewVideos = newVideos.filter((v) => !existingIds.has(v.id));
+
+      setVideos((prev) => [...prev, ...uniqueNewVideos]);
+      setNextPageToken(data.nextPageToken);
+      setTotalViews((prev) => prev + uniqueNewVideos.reduce((sum, v) => sum + v.viewCount, 0));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong loading more videos");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
@@ -287,11 +351,11 @@ export default function Home() {
         {/* Filters Section */}
         <section className="pb-6 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
-            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 p-3 sm:p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
               {/* Platform Selector */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Globe className="w-4 h-4 text-white/30 flex-shrink-0" />
-                <div className="flex gap-1.5">
+              <div className="flex items-center gap-1">
+                <Globe className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex gap-0.5">
                   {PLATFORMS.map((p) => {
                     const Icon = p.icon;
                     return (
@@ -299,7 +363,7 @@ export default function Home() {
                         key={p.value}
                         disabled={!p.available}
                         onClick={() => setPlatform(p.value)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap
                           ${platform === p.value && p.available
                             ? "bg-white/[0.08] text-white border border-white/[0.12]"
                             : "text-white/30 border border-transparent hover:text-white/50"
@@ -319,19 +383,19 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="hidden sm:block w-px h-6 bg-white/[0.06]" />
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
 
               {/* Interval Selector */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Clock className="w-4 h-4 text-white/30 flex-shrink-0" />
-                <div className="flex gap-1.5">
+              <div className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex gap-0.5">
                   {INTERVALS.map((int) => {
                     const Icon = int.icon;
                     return (
                       <button
                         key={int.value}
                         onClick={() => setInterval(int.value)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap
                           ${interval === int.value
                             ? "bg-white/[0.08] text-white border border-white/[0.12]"
                             : "text-white/30 border border-transparent hover:text-white/50"
@@ -340,6 +404,34 @@ export default function Home() {
                       >
                         <Icon className="w-3.5 h-3.5" />
                         <span>{int.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
+
+              {/* Video Type Selector */}
+              <div className="flex items-center gap-1">
+                <Film className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex gap-0.5">
+                  {VIDEO_TYPES.map((vt) => {
+                    const Icon = vt.icon;
+                    return (
+                      <button
+                        key={vt.value}
+                        onClick={() => setVideoType(vt.value)}
+                        title={vt.description}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap
+                          ${videoType === vt.value
+                            ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                            : "text-white/30 border border-transparent hover:text-white/50"
+                          }
+                        `}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{vt.label}</span>
                       </button>
                     );
                   })}
@@ -421,17 +513,51 @@ export default function Home() {
 
               {/* Video Grid */}
               {videos.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {videos.map((video, i) => (
-                    <div
-                      key={video.id}
-                      className="animate-fade-in-up"
-                      style={{ animationDelay: `${i * 0.05}s` }}
-                    >
-                      <VideoCard video={video} rank={i + 1} />
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {videos.map((video, i) => (
+                      <div
+                        key={video.id}
+                        className="animate-fade-in-up"
+                        style={{ animationDelay: `${i * 0.05}s` }}
+                      >
+                        <VideoCard video={video} rank={i + 1} onPlay={setPlayingVideo} />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Load More Button */}
+                  <div className="flex justify-center mt-8">
+                    {nextPageToken ? (
+                      <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] 
+                                   border border-white/[0.08] hover:border-white/[0.15] transition-all duration-300
+                                   text-sm font-medium text-white/50 hover:text-white/80
+                                   disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {loadingMore ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Loading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                            <span>Load More Videos</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <p className="text-xs text-white/20">
+                        {videos.length >= 20 ? "No more results available" : "All results loaded"}
+                      </p>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-20 animate-fade-in">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4">
@@ -519,6 +645,9 @@ export default function Home() {
           </div>
         </footer>
       </div>
+
+      {/* Global Video Player Modal — rendered at app root level for true fullscreen */}
+      <VideoPlayerModal video={playingVideo} onClose={() => setPlayingVideo(null)} />
     </div>
   );
 }
