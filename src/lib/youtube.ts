@@ -12,10 +12,14 @@ export interface YouTubeVideo {
   engagementRate: number;
   url: string;
   subscriberCount: number;
+  channelCreatedAt: string;
 }
 
 export interface YouTubeChannelItem {
   id: string;
+  snippet: {
+    publishedAt: string;
+  };
   statistics: {
     subscriberCount?: string;
   };
@@ -82,7 +86,8 @@ export async function searchViralVideos(
   apiKey: string,
   videoType: string = "all",
   pageToken?: string,
-  subscriberLimit?: number
+  subscriberLimit?: number,
+  maxChannelAgeMonths?: number
 ): Promise<{ videos: YouTubeVideo[]; nextPageToken?: string }> {
   const publishedAfter = getPublishedAfter(interval);
 
@@ -158,15 +163,16 @@ export async function searchViralVideos(
         engagementRate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
         url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
         subscriberCount: 0, // temporary, will fetch below
+        channelCreatedAt: "", // temporary, will fetch below
       };
     })
     .filter((v) => v.viewCount > 0);
 
-  // Step 4: Fetch subscriber counts for each unique channel
+  // Step 4: Fetch subscriber counts & channel creation dates for each unique channel
   const uniqueChannelIds = [...new Set(videos.map((v) => v.channelId))];
   if (uniqueChannelIds.length > 0) {
     const channelParams: Record<string, string> = {
-      part: "statistics",
+      part: "statistics,snippet",
       id: uniqueChannelIds.join(","),
     };
     try {
@@ -177,12 +183,19 @@ export async function searchViralVideos(
           parseInt(item.statistics?.subscriberCount || "0", 10),
         ] as [string, number])
       );
+      const channelCreatedAtMap: Map<string, string> = new Map(
+        (channelData.items || []).map((item: YouTubeChannelItem) => [
+          item.id,
+          item.snippet?.publishedAt || "",
+        ] as [string, string])
+      );
       videos = videos.map((v) => ({
         ...v,
         subscriberCount: subscriberMap.get(v.channelId) || 0,
+        channelCreatedAt: channelCreatedAtMap.get(v.channelId) || "",
       }));
     } catch {
-      // If channel fetch fails, continue with subscriberCount = 0
+      // If channel fetch fails, continue with default values
       // This is a non-critical enrichment step
     }
   }
@@ -192,7 +205,18 @@ export async function searchViralVideos(
     videos = videos.filter((v) => v.subscriberCount <= subscriberLimit && v.subscriberCount > 0);
   }
 
-  // Step 6: Sort by view count and limit results
+  // Step 6: Filter by max channel age (if set)
+  if (maxChannelAgeMonths && maxChannelAgeMonths > 0) {
+    const cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - maxChannelAgeMonths);
+    videos = videos.filter((v) => {
+      if (!v.channelCreatedAt) return false; // can't verify age, exclude
+      const channelDate = new Date(v.channelCreatedAt);
+      return channelDate >= cutoffDate;
+    });
+  }
+
+  // Step 7: Sort by view count and limit results
   videos = videos.sort((a, b) => b.viewCount - a.viewCount).slice(0, maxResults);
 
   return { videos, nextPageToken };

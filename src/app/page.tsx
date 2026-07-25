@@ -21,6 +21,7 @@ import {
   Smartphone,
   Monitor,
   Users,
+  Calendar,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
@@ -80,6 +81,7 @@ export default function Home() {
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [apiKey, setApiKey] = useState("");
   const [maxSubscribers, setMaxSubscribers] = useState("");
+  const [maxChannelAge, setMaxChannelAge] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -116,6 +118,9 @@ export default function Home() {
       if (maxSubscribers.trim()) {
         params.set("subscriberLimit", maxSubscribers.trim());
       }
+      if (maxChannelAge.trim()) {
+        params.set("maxChannelAge", maxChannelAge.trim());
+      }
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
@@ -146,7 +151,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [niche, interval, videoType, platform, apiKey, maxSubscribers]);
+  }, [niche, interval, videoType, platform, apiKey, maxSubscribers, maxChannelAge]);
 
   const handleLoadMore = useCallback(async () => {
     if (!nextPageToken || loadingMore) return;
@@ -166,6 +171,9 @@ export default function Home() {
       }
       if (maxSubscribers.trim()) {
         params.set("subscriberLimit", maxSubscribers.trim());
+      }
+      if (maxChannelAge.trim()) {
+        params.set("maxChannelAge", maxChannelAge.trim());
       }
 
       const controller = new AbortController();
@@ -195,7 +203,7 @@ export default function Home() {
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos, maxSubscribers]);
+  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos, maxSubscribers, maxChannelAge]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
@@ -468,6 +476,36 @@ export default function Home() {
                 {maxSubscribers.trim() && (
                   <button
                     onClick={() => setMaxSubscribers("")}
+                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
+
+              {/* Channel Age Filter */}
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-white/30 font-medium hidden sm:block">Max Age</span>
+                  <input
+                    type="number"
+                    value={maxChannelAge}
+                    onChange={(e) => setMaxChannelAge(e.target.value)}
+                    placeholder="Any"
+                    min="0"
+                    className="w-16 px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] 
+                             text-xs text-white/70 placeholder-white/30 outline-none
+                             focus:border-white/[0.15] focus:bg-white/[0.06] transition-all duration-200
+                             [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-[10px] text-white/30 font-medium hidden sm:block">months</span>
+                </div>
+                {maxChannelAge.trim() && (
+                  <button
+                    onClick={() => setMaxChannelAge("")}
                     className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
                   >
                     ✕
