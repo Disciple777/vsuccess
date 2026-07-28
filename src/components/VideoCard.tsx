@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, Heart, MessageCircle, ExternalLink, Clock, BarChart3, Play } from "lucide-react";
+import { Eye, Heart, MessageCircle, ExternalLink, Clock, BarChart3, Play, TrendingUp } from "lucide-react";
 import type { YouTubeVideo } from "@/lib/youtube";
-import { getEngagementLabel, formatCount } from "@/lib/youtube";
+import { getEngagementLabel, formatCount, getOutlierInfo } from "@/lib/youtube";
 
 interface VideoCardProps {
   video: YouTubeVideo;
@@ -14,6 +14,7 @@ interface VideoCardProps {
 export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
   const [imgError, setImgError] = useState(false);
   const engagementLabel = getEngagementLabel(video.engagementRate);
+  const outlier = getOutlierInfo(video.outlierMultiplier);
   const publishedDate = new Date(video.publishedAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -66,10 +67,34 @@ export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
             </div>
           </div>
 
-          {/* View count overlay */}
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-sm border border-white/[0.08]">
-            <Eye className="w-3 h-3 text-white/70" />
-            <span className="text-xs font-medium text-white">{formatCount(video.viewCount)}</span>
+          {/* View count + Outlier overlay (stacked) */}
+          <div className="absolute bottom-3 left-3 px-2.5 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm border border-white/[0.08] flex flex-col gap-1">
+            {/* Line 1: Outlier multiplier */}
+            <div className="flex items-center gap-1.5">
+              {outlier.icon ? (
+                <span className="text-xs">{outlier.icon}</span>
+              ) : (
+                <TrendingUp className={`w-3 h-3 transition-colors ${
+                  video.outlierMultiplier >= 2 ? "text-amber-400/70" :
+                  video.outlierMultiplier >= 1.5 ? "text-blue-400/50" :
+                  "text-white/30"
+                }`} />
+              )}
+              <span className={`text-xs font-medium ${
+                outlier.level >= 4 ? "text-purple-300" :
+                outlier.level >= 3 ? "text-blue-300" :
+                outlier.level >= 2 ? "text-amber-300" :
+                outlier.level >= 1 ? "text-white/80" :
+                "text-white/50"
+              }`}>
+                {video.outlierMultiplier.toFixed(1)}x
+              </span>
+            </div>
+            {/* Line 2: View count */}
+            <div className="flex items-center gap-1.5">
+              <Eye className="w-3 h-3 text-white/70" />
+              <span className="text-xs font-medium text-white">{formatCount(video.viewCount)}</span>
+            </div>
           </div>
         </div>
 

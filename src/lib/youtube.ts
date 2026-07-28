@@ -13,6 +13,8 @@ export interface YouTubeVideo {
   url: string;
   subscriberCount: number;
   channelCreatedAt: string;
+  channelAvgViews: number;
+  outlierMultiplier: number;
 }
 
 export interface YouTubeChannelItem {
@@ -22,6 +24,8 @@ export interface YouTubeChannelItem {
   };
   statistics: {
     subscriberCount?: string;
+    viewCount?: string;
+    videoCount?: string;
   };
 }
 
@@ -164,6 +168,8 @@ export async function searchViralVideos(
         url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
         subscriberCount: 0, // temporary, will fetch below
         channelCreatedAt: "", // temporary, will fetch below
+        channelAvgViews: 0, // temporary, will fetch below
+        outlierMultiplier: 1, // temporary, will fetch below
       };
     })
     .filter((v) => v.viewCount > 0);
@@ -189,11 +195,43 @@ export async function searchViralVideos(
           item.snippet?.publishedAt || "",
         ] as [string, string])
       );
-      videos = videos.map((v) => ({
-        ...v,
-        subscriberCount: subscriberMap.get(v.channelId) || 0,
-        channelCreatedAt: channelCreatedAtMap.get(v.channelId) || "",
-      }));
+      const channelViewCountMap: Map<string, number> = new Map(
+        (channelData.items || []).map((item: YouTubeChannelItem) => [
+          item.id,
+          parseInt(item.statistics?.viewCount || "0", 10),
+        ] as [string, number])
+      );
+      const channelVideoCountMap: Map<string, number> = new Map(
+        (channelData.items || []).map((item: YouTubeChannelItem) => [
+          item.id,
+          parseInt(item.statistics?.videoCount || "0", 10),
+        ] as [string, number])
+      );
+      videos = videos.map((v) => {
+        const channelTotalViews = channelViewCountMap.get(v.channelId) || 0;
+        const channelTotalVideos = channelVideoCountMap.get(v.channelId) || 0;
+        const subCount = subscriberMap.get(v.channelId) || 0;
+        const createdAt = channelCreatedAtMap.get(v.channelId) || "";
+
+        // Calculate channel average views excluding this video
+        let avgViews = 0;
+        let outlierMult = 1;
+        if (channelTotalVideos > 1) {
+          avgViews = (channelTotalViews - v.viewCount) / (channelTotalVideos - 1);
+          outlierMult = avgViews > 0 ? v.viewCount / avgViews : 1;
+        } else {
+          avgViews = channelTotalViews;
+          outlierMult = 1;
+        }
+
+        return {
+          ...v,
+          subscriberCount: subCount,
+          channelCreatedAt: createdAt,
+          channelAvgViews: avgViews,
+          outlierMultiplier: outlierMult,
+        };
+      });
     } catch {
       // If channel fetch fails, continue with default values
       // This is a non-critical enrichment step
@@ -228,6 +266,14 @@ export function getEngagementLabel(rate: number): string {
   if (rate > 2) return "📈 Good";
   if (rate > 1) return "👍 Solid";
   return "👀 Average";
+}
+
+export function getOutlierInfo(multiplier: number): { icon: string; level: number; label: string } {
+  if (multiplier >= 20) return { icon: "💎", level: 4, label: "Gem" };
+  if (multiplier >= 10) return { icon: "🚀", level: 3, label: "Rocketing" };
+  if (multiplier >= 5) return { icon: "🔥", level: 2, label: "Hot" };
+  if (multiplier >= 3) return { icon: "👀", level: 1, label: "Notable" };
+  return { icon: "", level: 0, label: "Normal" };
 }
 
 export function formatCount(count: number): string {
