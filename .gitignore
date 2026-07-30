@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# PHP local config (Hostinger DB credentials — do not commit!)
+php/config.php
+
 # vercel
 .vercel
 

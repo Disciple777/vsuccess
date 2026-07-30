@@ -22,11 +22,20 @@ import {
   Monitor,
   Users,
   Calendar,
+  LogIn,
+  LogOut,
+  Bookmark,
+  FolderOpen,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import type { YouTubeVideo } from "@/lib/youtube";
 import { formatCount } from "@/lib/youtube";
+import { useAuth } from "@/context/AuthContext";
+import { useSearchQuota } from "@/hooks/useSearchQuota";
+import UpgradeBanner from "@/components/UpgradeBanner";
+import { checkBookmarks } from "@/lib/api";
+import Link from "next/link";
 
 type Interval = "24h" | "7d" | "30d";
 type Platform = "youtube" | "tiktok" | "instagram";
@@ -84,11 +93,21 @@ export default function Home() {
   const [maxChannelAge, setMaxChannelAge] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  const { user: authUser, loading: authLoading, logout } = useAuth();
+  const {
+    remaining: quotaRemaining,
+    totalLimit: quotaTotal,
+    showBanner: quotaShowBanner,
+    dismissBanner: quotaDismissBanner,
+    trackSearch: quotaTrackSearch,
+  } = useSearchQuota();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
   const [totalViews, setTotalViews] = useState(0);
   const [playingVideo, setPlayingVideo] = useState<YouTubeVideo | null>(null);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -135,12 +154,25 @@ export default function Home() {
         throw new Error(data.details || data.error || data.message || "Failed to fetch videos");
       }
 
-      setVideos(data.videos || []);
+      const newVideos = data.videos || [];
+      setVideos(newVideos);
       setSearched(true);
       setNextPageToken(data.nextPageToken);
       setTotalViews(
-        (data.videos || []).reduce((sum, v) => sum + v.viewCount, 0)
+        newVideos.reduce((sum, v) => sum + v.viewCount, 0)
       );
+
+      // Bulk check which videos are bookmarked
+      if (newVideos.length > 0) {
+        checkBookmarks(newVideos.map((v) => v.id))
+          .then((ids) => setBookmarkedIds(new Set(ids)))
+          .catch(() => {});
+      } else {
+        setBookmarkedIds(new Set());
+      }
+
+      // Track search for free tier quota
+      quotaTrackSearch(trimmedNiche);
 
       // Scroll to results
       setTimeout(() => {
@@ -151,7 +183,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [niche, interval, videoType, platform, apiKey, maxSubscribers, maxChannelAge]);
+  }, [niche, interval, videoType, platform, apiKey, maxSubscribers, maxChannelAge, quotaTrackSearch]);
 
   const handleLoadMore = useCallback(async () => {
     if (!nextPageToken || loadingMore) return;
@@ -198,6 +230,13 @@ export default function Home() {
       setVideos((prev) => [...prev, ...uniqueNewVideos]);
       setNextPageToken(data.nextPageToken);
       setTotalViews((prev) => prev + uniqueNewVideos.reduce((sum, v) => sum + v.viewCount, 0));
+
+      // Check bookmark status for new videos
+      if (uniqueNewVideos.length > 0) {
+        checkBookmarks(uniqueNewVideos.map((v) => v.id))
+          .then((ids) => setBookmarkedIds((prev) => new Set([...prev, ...ids])))
+          .catch(() => {});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong loading more videos");
     } finally {
@@ -239,16 +278,84 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* API Key Toggle */}
-              <button
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
-                           border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
-                           text-xs text-white/50 hover:text-white/80"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>API Key</span>
-              </button>
+              {/* Auth Section */}
+              <div className="flex items-center gap-2">
+                {authLoading ? (
+                  <div className="w-8 h-8 rounded-full shimmer" />
+                ) : authUser ? (
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href="/bookmarks"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
+                                 border border-white/[0.06] hover:border-red-500/30 transition-all duration-300
+                                 text-xs text-white/40 hover:text-red-400/80 group"
+                      title="My Bookmarks"
+                    >
+                      <Bookmark className="w-3.5 h-3.5 transition-all duration-300 group-hover:fill-red-400/30" />
+                      <span className="hidden sm:inline">Bookmarks</span>
+                    </Link>
+                    <Link
+                      href="/collections"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
+                                 border border-white/[0.06] hover:border-purple-500/30 transition-all duration-300
+                                 text-xs text-white/40 hover:text-purple-400/80"
+                      title="My Collections"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Collections</span>
+                    </Link>
+                    <button
+                      onClick={logout}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
+                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
+                                 text-xs text-white/40 hover:text-white/70"
+                      title="Sign out"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Sign out</span>
+                    </button>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/[0.08]">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-500/40 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-white/80">
+                          {(authUser.name || authUser.email).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-xs text-white/60 hidden sm:block max-w-[120px] truncate">
+                        {authUser.name || authUser.email}
+                      </span>
+                      {authUser.tier === "paid" && (
+                        <span className="text-[10px] font-medium text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                          PRO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Link
+                      href="/auth/login"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
+                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
+                                 text-xs text-white/50 hover:text-white/80"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>Sign in</span>
+                    </Link>
+                    {/* API Key button commented out — key is set in .env.local */}
+                    {/*
+                    <button
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
+                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
+                                 text-xs text-white/50 hover:text-white/80"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>API Key</span>
+                    </button>
+                    */}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </header>
@@ -559,6 +666,15 @@ export default function Home() {
         {(videos.length > 0 || searched) && !loading && (
           <section ref={resultsRef} className="px-4 sm:px-6 lg:px-8 pb-20">
             <div className="max-w-7xl mx-auto">
+              {/* Upgrade Banner */}
+              {quotaShowBanner && quotaRemaining !== null && (
+                <UpgradeBanner
+                  remaining={quotaRemaining}
+                  totalLimit={quotaTotal}
+                  onDismiss={quotaDismissBanner}
+                />
+              )}
+
               {/* Stats Bar */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-in">
                 <div>
@@ -596,7 +712,12 @@ export default function Home() {
                         className="animate-fade-in-up"
                         style={{ animationDelay: `${i * 0.05}s` }}
                       >
-                        <VideoCard video={video} rank={i + 1} onPlay={setPlayingVideo} />
+                        <VideoCard
+                          video={video}
+                          rank={i + 1}
+                          onPlay={setPlayingVideo}
+                          initialBookmarked={bookmarkedIds.has(video.id)}
+                        />
                       </div>
                     ))}
                   </div>

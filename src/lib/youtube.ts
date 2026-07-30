@@ -15,6 +15,7 @@ export interface YouTubeVideo {
   channelCreatedAt: string;
   channelAvgViews: number;
   outlierMultiplier: number;
+  channelVideoCount: number;
 }
 
 export interface YouTubeChannelItem {
@@ -170,6 +171,7 @@ export async function searchViralVideos(
         channelCreatedAt: "", // temporary, will fetch below
         channelAvgViews: 0, // temporary, will fetch below
         outlierMultiplier: 1, // temporary, will fetch below
+        channelVideoCount: 0, // temporary, will fetch below
       };
     })
     .filter((v) => v.viewCount > 0);
@@ -230,6 +232,7 @@ export async function searchViralVideos(
           channelCreatedAt: createdAt,
           channelAvgViews: avgViews,
           outlierMultiplier: outlierMult,
+          channelVideoCount: channelTotalVideos,
         };
       });
     } catch {

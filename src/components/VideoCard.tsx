@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, Heart, MessageCircle, ExternalLink, Clock, BarChart3, Play, TrendingUp } from "lucide-react";
+import { Eye, Heart, MessageCircle, ExternalLink, Clock, BarChart3, Play, TrendingUp, Users, Clapperboard } from "lucide-react";
 import type { YouTubeVideo } from "@/lib/youtube";
 import { getEngagementLabel, formatCount, getOutlierInfo } from "@/lib/youtube";
+import BookmarkButton from "@/components/BookmarkButton";
 
 interface VideoCardProps {
   video: YouTubeVideo;
   rank: number;
   onPlay?: (video: YouTubeVideo) => void;
+  initialBookmarked?: boolean;
 }
 
-export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
+export default function VideoCard({ video, rank, onPlay, initialBookmarked = false }: VideoCardProps) {
   const [imgError, setImgError] = useState(false);
   const engagementLabel = getEngagementLabel(video.engagementRate);
   const outlier = getOutlierInfo(video.outlierMultiplier);
@@ -32,6 +34,19 @@ export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
                           border border-white/[0.08] backdrop-blur-sm text-white font-bold text-sm">
             {rank}
           </div>
+        </div>
+
+        {/* Bookmark Button */}
+        <div className="absolute top-3 right-3 z-10">
+          <BookmarkButton
+            videoId={video.id}
+            videoTitle={video.title}
+            channelTitle={video.channelTitle}
+            channelId={video.channelId}
+            thumbnailUrl={video.thumbnail}
+            viewCount={video.viewCount}
+            initialBookmarked={initialBookmarked}
+          />
         </div>
 
         {/* Thumbnail */}
@@ -100,31 +115,13 @@ export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
 
       {/* Content */}
       <div className="p-4 space-y-3">
-        {/* Title */}
+        {/* Title — right below thumbnail */}
         <h3 className="font-semibold text-sm leading-snug text-white/90 line-clamp-2 group-hover:text-white transition-colors">
           {video.title}
         </h3>
 
-        {/* Channel — clickable, opens channel page in new tab */}
-        <a
-          href={`https://www.youtube.com/channel/${video.channelId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-2 group/channel"
-        >
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center transition-all duration-300 group-hover/channel:from-blue-500/50 group-hover/channel:to-purple-500/50">
-            <span className="text-xs font-bold text-white/60">
-              {video.channelTitle.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <span className="text-xs text-white/50 truncate group-hover/channel:text-white/80 transition-colors duration-200">
-            {video.channelTitle}
-          </span>
-        </a>
-
-        {/* Stats Row */}
-        <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+        {/* Stats Row — video engagement data */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <Heart className="w-3.5 h-3.5 text-red-400/70" />
@@ -156,6 +153,43 @@ export default function VideoCard({ video, rank, onPlay }: VideoCardProps) {
         <div className="flex items-center gap-1.5 text-[11px] text-white/30">
           <Clock className="w-3 h-3" />
           <span>{publishedDate}</span>
+        </div>
+
+        {/* Channel Section — separated with a border */}
+        <div className="pt-3 border-t border-white/[0.06] space-y-3">
+          {/* Channel — clickable, opens channel page in new tab */}
+          <a
+            href={`https://www.youtube.com/channel/${video.channelId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2 group/channel"
+          >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center transition-all duration-300 group-hover/channel:from-blue-500/50 group-hover/channel:to-purple-500/50">
+              <span className="text-xs font-bold text-white/60">
+                {video.channelTitle.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <span className="text-xs text-white/50 truncate group-hover/channel:text-white/80 transition-colors duration-200">
+              {video.channelTitle}
+            </span>
+          </a>
+
+          {/* Channel Info Row */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3 h-3 text-blue-400/60" />
+              <span className="text-xs text-white/50">{formatCount(video.subscriberCount)} subs</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clapperboard className="w-3 h-3 text-purple-400/60" />
+              <span className="text-xs text-white/50">{formatCount(video.channelVideoCount ?? 0)} videos</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <BarChart3 className="w-3 h-3 text-green-400/60" />
+              <span className="text-xs text-white/50">{formatCount(Math.round(video.channelAvgViews))} avg</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
