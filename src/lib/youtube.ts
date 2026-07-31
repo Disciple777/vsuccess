@@ -216,22 +216,18 @@ export async function searchViralVideos(
         const createdAt = channelCreatedAtMap.get(v.channelId) || "";
 
         // Calculate channel average views excluding this video
-        let avgViews = 0;
-        let outlierMult = 1;
-        if (channelTotalVideos > 1) {
-          avgViews = (channelTotalViews - v.viewCount) / (channelTotalVideos - 1);
-          outlierMult = avgViews > 0 ? v.viewCount / avgViews : 1;
-        } else {
-          avgViews = channelTotalViews;
-          outlierMult = 1;
-        }
+        const { avgViews, outlierMultiplier } = computeChannelAverage(
+          channelTotalViews,
+          channelTotalVideos,
+          v.viewCount
+        );
 
         return {
           ...v,
           subscriberCount: subCount,
           channelCreatedAt: createdAt,
           channelAvgViews: avgViews,
-          outlierMultiplier: outlierMult,
+          outlierMultiplier,
           channelVideoCount: channelTotalVideos,
         };
       });
@@ -283,4 +279,359 @@ export function formatCount(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
   return count.toString();
+}
+
+/**
+ * Compute a channel's average views per video (excluding the given video)
+ * and the outlier multiplier for that video.
+ *
+ * ⚠️ Guards against stale YouTube channel statistics: `channels.list`
+ * reports channel-wide totals that are cached server-side and lag behind
+ * real-time video stats. A viral video's `viewCount` can temporarily exceed
+ * the channel's reported total views, which would make
+ * `(channelTotalViews - videoViewCount) / (videoCount - 1)` NEGATIVE.
+ *
+ * In that case we fall back to the channel average including the video
+ * (`channelTotalViews / videoCount`), which is always ≥ 0, so the UI never
+ * shows a negative average and the outlier multiplier stays meaningful.
+ */
+export function computeChannelAverage(
+  channelTotalViews: number,
+  channelVideoCount: number,
+  videoViewCount: number
+): { avgViews: number; outlierMultiplier: number } {
+  // Stale stats: the video's views exceed the channel's reported total.
+  if (channelTotalViews < videoViewCount) {
+    const avgViews = channelVideoCount > 0 ? channelTotalViews / channelVideoCount : 0;
+    return { avgViews, outlierMultiplier: avgViews > 0 ? videoViewCount / avgViews : 1 };
+  }
+
+  if (channelVideoCount > 1) {
+    const avgViews = (channelTotalViews - videoViewCount) / (channelVideoCount - 1);
+    return { avgViews, outlierMultiplier: avgViews > 0 ? videoViewCount / avgViews : 1 };
+  }
+
+  return { avgViews: channelTotalViews, outlierMultiplier: 1 };
+}
+
+// ── Channel lookup (URL / @handle → channel info) ──────────────
+
+export interface ChannelLookupResult {
+  channelId: string;
+  title: string;
+  avatar: string;
+  description: string;
+  subscriberCount: number;
+  videoCount: number;
+  totalViews: number;
+  createdAt: string;
+  handle: string | null;
+  url: string;
+}
+
+export class ChannelLookupError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ChannelLookupError";
+    this.status = status;
+  }
+}
+
+type ParsedChannelInput =
+  | { type: "id"; value: string }
+  | { type: "handle"; value: string }
+  | { type: "video"; value: string }
+  | { type: "unsupported"; value: string };
+
+/**
+ * Parse a user-pasted string into a channel lookup query.
+ * Accepts:
+ *   - https://youtube.com/channel/UC...  → channel ID
+ *   - https://youtube.com/@handle        → handle
+ *   - https://youtube.com/watch?v=...    → video ID (channel resolved via the video)
+ *   - https://youtube.com/shorts/...     → video ID
+ *   - @handle                            → handle
+ *   - Bare UC... channel ID              → channel ID
+ *   - Bare handle without @              → handle
+ */
+export function parseChannelInput(input: string): ParsedChannelInput | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Try to parse as URL (prepend https:// when no protocol is present)
+  let url: URL | null = null;
+  try {
+    url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    url = null;
+  }
+
+  if (url && /(^|\.)youtube\.com$|youtu\.be$/i.test(url.hostname)) {
+    const segments = url.pathname.split("/").filter(Boolean);
+
+    // /channel/UC...
+    if (segments[0] === "channel" && segments[1]) {
+      return { type: "id", value: segments[1] };
+    }
+    // /@handle
+    if (segments[0] && segments[0].startsWith("@")) {
+      return { type: "handle", value: segments[0] };
+    }
+    // /watch?v=...
+    if (url.searchParams.get("v")) {
+      return { type: "video", value: url.searchParams.get("v")! };
+    }
+    // /shorts/<id>
+    if (segments[0] === "shorts" && segments[1]) {
+      return { type: "video", value: segments[1] };
+    }
+    // youtu.be/<videoId> (short share links, with or without www)
+    if (url.hostname.endsWith("youtu.be") && segments[0]) {
+      return { type: "video", value: segments[0] };
+    }
+    // Legacy custom URLs (c/ and user/) can't be resolved via the Data API
+    if (segments[0] === "c" || segments[0] === "user") {
+      return { type: "unsupported", value: trimmed };
+    }
+  }
+
+  // @handle
+  if (trimmed.startsWith("@")) {
+    return { type: "handle", value: trimmed };
+  }
+
+  // Bare channel ID (UC + 22 chars)
+  if (/^UC[\w-]{22}$/.test(trimmed)) {
+    return { type: "id", value: trimmed };
+  }
+
+  // Bare handle without @ (single token, no spaces)
+  if (/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+    return { type: "handle", value: `@${trimmed}` };
+  }
+
+  return null;
+}
+
+/**
+ * Resolve a YouTube channel from a URL, @handle, or channel ID.
+ *
+ * Cost: 1 unit (channels.list) — 2 units if a video URL is given
+ * (videos.list to find the channel + channels.list).
+ */
+export async function lookupChannel(input: string, apiKey: string): Promise<ChannelLookupResult> {
+  const parsed = parseChannelInput(input);
+  if (!parsed) {
+    throw new ChannelLookupError(
+      "That doesn't look like a YouTube channel link or @handle. Try pasting a channel URL like youtube.com/@MrBeast.",
+      400
+    );
+  }
+
+  if (parsed.type === "unsupported") {
+    throw new ChannelLookupError(
+      "Legacy channel URLs (youtube.com/c/...) can't be resolved directly. Open the channel on YouTube and copy its @handle link instead.",
+      400
+    );
+  }
+
+  let channelId: string;
+  let handle: string | null = null;
+
+  if (parsed.type === "video") {
+    // Resolve the channel from a video URL (1 unit)
+    const videoData = await fetchFromYouTube("videos", { part: "snippet", id: parsed.value }, apiKey);
+    const video = videoData.items?.[0];
+    if (!video?.snippet?.channelId) {
+      throw new ChannelLookupError("Couldn't find the channel for that video.", 404);
+    }
+    channelId = video.snippet.channelId;
+  } else {
+    channelId = parsed.value;
+    if (parsed.type === "handle") handle = parsed.value;
+  }
+
+  // Fetch channel details (1 unit)
+  const params: Record<string, string> = { part: "snippet,statistics" };
+  if (handle) {
+    params.forHandle = handle;
+  } else {
+    params.id = channelId;
+  }
+
+  const data = await fetchFromYouTube("channels", params, apiKey);
+  const item = data.items?.[0];
+  if (!item) {
+    throw new ChannelLookupError("Channel not found. Double-check the link or handle.", 404);
+  }
+
+  return {
+    channelId: item.id,
+    title: item.snippet?.title || "Unknown channel",
+    avatar:
+      item.snippet?.thumbnails?.high?.url ||
+      item.snippet?.thumbnails?.medium?.url ||
+      item.snippet?.thumbnails?.default?.url ||
+      "",
+    description: item.snippet?.description || "",
+    subscriberCount: parseInt(item.statistics?.subscriberCount || "0", 10),
+    videoCount: parseInt(item.statistics?.videoCount || "0", 10),
+    totalViews: parseInt(item.statistics?.viewCount || "0", 10),
+    createdAt: item.snippet?.publishedAt || "",
+    handle,
+    url: `https://www.youtube.com/channel/${item.id}`,
+  };
+}
+
+// ── Video lookup (URL / ID → full YouTubeVideo with stats) ──
+
+export class VideoLookupError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "VideoLookupError";
+    this.status = status;
+  }
+}
+
+/**
+ * Parse a user-pasted string into a YouTube video ID.
+ * Accepts:
+ *   - https://youtube.com/watch?v=...   → video ID
+ *   - https://youtu.be/<id>             → video ID
+ *   - https://youtube.com/shorts/<id>   → video ID
+ *   - Bare 11-char video ID             → video ID
+ * Returns null if it doesn't look like a video link.
+ */
+export function parseVideoInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Try to parse as URL (prepend https:// when no protocol is present)
+  let url: URL | null = null;
+  try {
+    url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    url = null;
+  }
+
+  if (url && /(^|\.)youtube\.com$|youtu\.be$/i.test(url.hostname)) {
+    const segments = url.pathname.split("/").filter(Boolean);
+
+    // /shorts/<id> (checked first so a stray v= param on a shorts URL can't override)
+    if (segments[0] === "shorts" && segments[1]) {
+      return segments[1];
+    }
+    // youtu.be/<videoId> (short share links, with or without www)
+    if (url.hostname.endsWith("youtu.be") && segments[0]) {
+      return segments[0];
+    }
+    // /watch?v=...
+    if (url.searchParams.get("v")) {
+      return url.searchParams.get("v")!;
+    }
+    // Any other YouTube URL (channel, @handle, playlist…) is not a video
+    return null;
+  }
+
+  // Bare video ID (11 characters)
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve a full YouTube video (with stats, engagement rate, and
+ * channel outlier info) from a pasted URL or video ID.
+ *
+ * Cost: 2 units — videos.list (1) + channels.list (1).
+ */
+export async function lookupVideo(input: string, apiKey: string): Promise<YouTubeVideo> {
+  const videoId = parseVideoInput(input);
+  if (!videoId) {
+    throw new VideoLookupError(
+      "That doesn't look like a YouTube video link. Try pasting a URL like youtube.com/watch?v=abc123.",
+      400
+    );
+  }
+
+  // Step 1: Fetch video snippet + statistics (1 unit)
+  const videoData = await fetchFromYouTube(
+    "videos",
+    { part: "snippet,statistics", id: videoId },
+    apiKey
+  );
+  const item = videoData.items?.[0];
+  if (!item) {
+    throw new VideoLookupError("Video not found. Double-check the link or ID.", 404);
+  }
+
+  const viewCount = parseInt(item.statistics?.viewCount || "0", 10);
+  const likeCount = parseInt(item.statistics?.likeCount || "0", 10);
+  const commentCount = parseInt(item.statistics?.commentCount || "0", 10);
+
+  const channelId = item.snippet?.channelId || "";
+  const channelTitle = item.snippet?.channelTitle || "Unknown channel";
+
+  // Step 2: Fetch channel stats for the outlier calculation (1 unit)
+  let subscriberCount = 0;
+  let channelCreatedAt = "";
+  let channelAvgViews = 0;
+  let outlierMultiplier = 1;
+  let channelVideoCount = 0;
+
+  if (channelId) {
+    try {
+      const channelData = await fetchFromYouTube(
+        "channels",
+        { part: "snippet,statistics", id: channelId },
+        apiKey
+      );
+      const channel = channelData.items?.[0];
+      if (channel) {
+        subscriberCount = parseInt(channel.statistics?.subscriberCount || "0", 10);
+        channelCreatedAt = channel.snippet?.publishedAt || "";
+        const channelTotalViews = parseInt(channel.statistics?.viewCount || "0", 10);
+        channelVideoCount = parseInt(channel.statistics?.videoCount || "0", 10);
+
+        // Calculate channel average views excluding this video
+        const { avgViews, outlierMultiplier: multiplier } = computeChannelAverage(
+          channelTotalViews,
+          channelVideoCount,
+          viewCount
+        );
+        channelAvgViews = avgViews;
+        outlierMultiplier = multiplier;
+      }
+    } catch {
+      // Non-critical enrichment step — keep default values
+    }
+  }
+
+  return {
+    id: item.id,
+    title: item.snippet?.title || "Unknown title",
+    description: item.snippet?.description || "",
+    thumbnail:
+      item.snippet?.thumbnails?.high?.url ||
+      item.snippet?.thumbnails?.medium?.url ||
+      item.snippet?.thumbnails?.default?.url ||
+      "",
+    channelTitle,
+    channelId,
+    publishedAt: item.snippet?.publishedAt || "",
+    viewCount,
+    likeCount,
+    commentCount,
+    engagementRate: viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0,
+    url: `https://www.youtube.com/watch?v=${item.id}`,
+    subscriberCount,
+    channelCreatedAt,
+    channelAvgViews,
+    outlierMultiplier,
+    channelVideoCount,
+  };
 }

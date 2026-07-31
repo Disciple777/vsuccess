@@ -245,16 +245,25 @@ POST /log_usage.php    ← Token required → { niche: "..." } → logs search
 - [x] Update `page.tsx` header — Add Collections link for logged-in users
 - [x] Fix cursor-pointer on bookmark heart button
 
-### Phase 6: Followed Channels ⬜ (Not started)
+### Phase 6: Followed Channels ✅ (Completed)
 
 **Goal**: Let users follow YouTube channels and see their recent videos.
 
-- [ ] Create PHP endpoint: `POST /api/followed-channels` — Follow a channel
-- [ ] Create PHP endpoint: `DELETE /api/followed-channels/:id` — Unfollow
-- [ ] Create PHP endpoint: `GET /api/followed-channels` — List followed channels
-- [ ] Add follow button to `VideoCard.tsx` (or channel name area)
-- [ ] Create `src/app/following/page.tsx` — Following/feed page (latest videos from followed channels)
-- **Stretch**: Add YouTube Data API integration to fetch latest videos from followed channels
+- [x] Create PHP endpoint: `POST /follow_channel.php` — Follow a channel (duplicate check, ownership enforced via user_id)
+- [x] Create PHP endpoint: `POST /unfollow_channel.php` — Unfollow (by channel_id, ownership enforced)
+- [x] Create PHP endpoint: `GET /list_followed_channels.php` — List followed channels (newest first)
+- [x] Add `FollowButton.tsx` — Follow/unfollow toggle with optimistic UI, auth redirect, size variants (xs/sm)
+- [x] Update `VideoCard.tsx` — Follow button next to channel name (xs size, right-aligned)
+- [x] Create Next.js API route: `GET /api/channel-videos?channelId=UC...&maxResults=5` — Fetches latest videos from a YouTube channel (search.list + videos.list)
+- [x] Create `src/app/following/page.tsx` — Following/feed page with channel cards (expand/collapse), latest videos per channel, unfollow, empty state
+- [x] Update `page.tsx` header — Add Following link (Heart icon, blue hover) for logged-in users
+- [x] **Extension: Channel Lookup (paste URL/@handle)** — `GET /api/channel-lookup?input=...` resolves a channel from a pasted URL or @handle (channels.list, 1–2 units); "Find a channel" box on `/following` with result card (avatar, name, @handle, subs/videos/views) + Follow button + Inspect link
+  - Supported inputs: `/channel/UC...`, `@handle`, `/watch?v=` and `/shorts/` and `youtu.be` video links (resolves the video's channel), bare `@handle` / channel ID / single-token handle
+  - Legacy `youtube.com/c/...` URLs not resolvable via API → friendly error suggesting the @handle
+  - Cost: **1 unit** per handle/ID lookup, **2 units** for video links → ~10k lookups/day on free tier
+- [x] **Extension: Video Lookup (paste video URL/ID)** — `GET /api/video-lookup?input=...` resolves a full `YouTubeVideo` (with stats, engagement rate, and channel outlier info) from a pasted URL or ID (`videos.list` + `channels.list` = 2 units); reusable `VideoLookup` bar on `/bookmarks`, `/collections`, and `/collections/[id]` — renders the same `VideoCard` as the main page (bookmark ❤️ + collection folder), and on the collection detail page a quick **Add to this collection** button that bookmarks first then adds
+  - Supported inputs: `/watch?v=`, `/shorts/`, `youtu.be`, bare 11-char video ID
+  - Cost: **2 units** per lookup → ~5k lookups/day on free tier
 
 ### Phase 7: Payment Integration ⬜ (Not started)
 
@@ -384,7 +393,7 @@ src/
 | **Phase 3: Tier Tracking + Upgrade Banner** | ✅ Completed |
 | **Phase 4: Bookmarks** | ✅ Completed |
 | **Phase 5: Collections** | ✅ Completed |
-| **Phase 6: Followed Channels** | ⬜ Not started |
+| **Phase 6: Followed Channels** | ✅ Completed |
 | **Phase 7: Payment Integration** | ⬜ Not started |
 
 ---

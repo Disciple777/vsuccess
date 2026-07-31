@@ -20,6 +20,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { listBookmarks, type Bookmark as BookmarkType } from "@/lib/api";
 import { formatCount } from "@/lib/youtube";
 import CollectionPicker from "@/components/CollectionPicker";
+import VideoLookup from "@/components/VideoLookup";
 
 export default function BookmarksPage() {
   const { user } = useAuth();
@@ -120,6 +121,9 @@ export default function BookmarksPage() {
           {/* Main Content */}
           <main className="px-4 sm:px-6 lg:px-8 py-8">
             <div className="max-w-7xl mx-auto">
+              {/* Video lookup — paste a URL to analyze & save */}
+              <VideoLookup onBookmarkToggle={() => fetchBookmarks(1)} />
+
               {/* Error */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/5 border border-red-500/10">

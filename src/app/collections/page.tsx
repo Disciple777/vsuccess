@@ -24,6 +24,7 @@ import {
   deleteCollection,
   type Collection,
 } from "@/lib/api";
+import VideoLookup from "@/components/VideoLookup";
 
 export default function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -179,6 +180,9 @@ export default function CollectionsPage() {
           {/* Main */}
           <main className="px-4 sm:px-6 lg:px-8 py-8">
             <div className="max-w-4xl mx-auto">
+              {/* Video lookup — paste a URL to analyze & save */}
+              <VideoLookup />
+
               {/* Error */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/5 border border-red-500/10">

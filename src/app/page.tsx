@@ -26,6 +26,7 @@ import {
   LogOut,
   Bookmark,
   FolderOpen,
+  Heart,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
@@ -33,6 +34,7 @@ import type { YouTubeVideo } from "@/lib/youtube";
 import { formatCount } from "@/lib/youtube";
 import { useAuth } from "@/context/AuthContext";
 import { useSearchQuota } from "@/hooks/useSearchQuota";
+import { useFollowedChannelIds } from "@/hooks/useFollowedChannelIds";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import { checkBookmarks } from "@/lib/api";
 import Link from "next/link";
@@ -94,6 +96,7 @@ export default function Home() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const { user: authUser, loading: authLoading, logout } = useAuth();
+  const { followedChannelIds, toggleFollowedChannel } = useFollowedChannelIds();
   const {
     remaining: quotaRemaining,
     totalLimit: quotaTotal,
@@ -284,6 +287,16 @@ export default function Home() {
                   <div className="w-8 h-8 rounded-full shimmer" />
                 ) : authUser ? (
                   <div className="flex items-center gap-2">
+                    <Link
+                      href="/following"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
+                                 border border-white/[0.06] hover:border-blue-500/30 transition-all duration-300
+                                 text-xs text-white/40 hover:text-blue-400/80"
+                      title="My Followed Channels"
+                    >
+                      <Heart className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Following</span>
+                    </Link>
                     <Link
                       href="/bookmarks"
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
@@ -717,6 +730,10 @@ export default function Home() {
                           rank={i + 1}
                           onPlay={setPlayingVideo}
                           initialBookmarked={bookmarkedIds.has(video.id)}
+                          initialFollowed={followedChannelIds.has(video.channelId)}
+                          onFollowToggle={(nowFollowed) =>
+                            toggleFollowedChannel(video.channelId, nowFollowed)
+                          }
                         />
                       </div>
                     ))}

@@ -372,6 +372,64 @@ export async function checkBookmarks(videoIds: string[]): Promise<string[]> {
   return res.data.bookmarked_ids;
 }
 
+// ── Followed Channel types ────────────────────────────
+
+export interface FollowedChannel {
+  id: number;
+  channel_id: string;
+  channel_title: string;
+  channel_avatar: string | null;
+  followed_at: string;
+}
+
+export interface FollowedChannelListData {
+  channels: FollowedChannel[];
+}
+
+// ── Followed Channel endpoints ──────────────────────────
+
+/**
+ * Follow a YouTube channel.
+ */
+export async function followChannel(channel: {
+  channel_id: string;
+  channel_title: string;
+  channel_avatar?: string;
+}): Promise<void> {
+  const res = await phpFetch("follow_channel.php", {
+    method: "POST",
+    body: JSON.stringify(channel),
+  });
+
+  if (!res.success) {
+    throw new Error(res.error || "Failed to follow channel");
+  }
+}
+
+/**
+ * Unfollow a YouTube channel by channel_id.
+ */
+export async function unfollowChannel(channelId: string): Promise<void> {
+  const res = await phpFetch("unfollow_channel.php", {
+    method: "POST",
+    body: JSON.stringify({ channel_id: channelId }),
+  });
+
+  if (!res.success) {
+    throw new Error(res.error || "Failed to unfollow channel");
+  }
+}
+
+/**
+ * List all followed channels for the current user.
+ */
+export async function listFollowedChannels(): Promise<FollowedChannel[]> {
+  const res = await phpFetch<FollowedChannelListData>("list_followed_channels.php");
+
+  if (!res.success || !res.data) return [];
+  return res.data.channels;
+}
+
 // ── Auth endpoints ─────────────────────────────────────
 
 export interface AuthResult {

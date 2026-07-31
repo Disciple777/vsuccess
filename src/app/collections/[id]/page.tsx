@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import { formatCount } from "@/lib/youtube";
 import { useRouter } from "next/navigation";
+import VideoLookup from "@/components/VideoLookup";
 
 export default function CollectionDetailPage() {
   const params = useParams();
@@ -207,6 +208,13 @@ export default function CollectionDetailPage() {
           {/* Main */}
           <main className="px-4 sm:px-6 lg:px-8 py-8">
             <div className="max-w-7xl mx-auto">
+              {/* Video lookup — paste a URL to analyze & add directly to this collection */}
+              <VideoLookup
+                quickAddCollectionId={collectionId}
+                quickAddCollectionName={collection?.name}
+                onQuickAdded={fetchDetail}
+              />
+
               {/* Error */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/5 border border-red-500/10">

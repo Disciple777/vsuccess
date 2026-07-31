@@ -124,6 +124,7 @@ Built with **Next.js 16** and **React 19**, deployed seamlessly on **Vercel**.
 4. **Run the development server**
    ```bash
    npm run dev
+   npm run dev -- -p 3001
    ```
 
 5. **Open the app**
