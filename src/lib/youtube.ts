@@ -92,7 +92,9 @@ export async function searchViralVideos(
   videoType: string = "all",
   pageToken?: string,
   subscriberLimit?: number,
-  maxChannelAgeMonths?: number
+  maxChannelAgeMonths?: number,
+  sort: "relevance" | "views" = "relevance",
+  strictRelevance: boolean = false
 ): Promise<{ videos: YouTubeVideo[]; nextPageToken?: string }> {
   const publishedAfter = getPublishedAfter(interval);
 
@@ -253,14 +255,37 @@ export async function searchViralVideos(
     });
   }
 
-  // Step 7: Sort by view count and limit results
-  videos = videos.sort((a, b) => b.viewCount - a.viewCount).slice(0, maxResults);
+  // Step 7: Strict relevance filter (optional) — hide videos that don't
+  // clearly match the niche. Runs before sorting so the pool is narrowed.
+  if (strictRelevance) {
+    videos = videos.filter((v) => matchesStrictRelevance(v, niche));
+  }
+
+  // Step 8: Sort and limit results
+  // ── relevance (default): the Data API's own "relevance" ordering is
+  //    rudimentary keyword matching — for "surface pattern design" it
+  //    happily ranks videos about painting floors (they contain "surface"
+  //    + "pattern"). So we RE-RANK its pool with our own lightweight
+  //    scorer: titles/descriptions containing the exact niche phrase (or
+  //    more of its words) float to the top. Stable — YouTube's original
+  //    order is the tiebreaker.
+  // ── views: sort by view count descending (popularity-first).
+  if (sort === "views") {
+    videos = videos.sort((a, b) => b.viewCount - a.viewCount);
+  } else {
+    videos = videos
+      .map((v, index) => ({ v, index, score: scoreRelevance(v, niche) }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ v }) => v);
+  }
+
+  videos = videos.slice(0, maxResults);
 
   return { videos, nextPageToken };
 }
 
 export function getEngagementLabel(rate: number): string {
-  if (rate > 10) return "🔥 Viral";
+  if (rate > 10) return "🔥 Hooked";
   if (rate > 5) return "💥 High";
   if (rate > 2) return "📈 Good";
   if (rate > 1) return "👍 Solid";
@@ -279,6 +304,62 @@ export function formatCount(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
   return count.toString();
+}
+
+/**
+ * Lightweight relevance scorer used to RE-RANK YouTube's search pool.
+ *
+ * The Data API's own "relevance" ordering is rudimentary keyword matching —
+ * for a query like "surface pattern design" it happily returns videos about
+ * painting floors (they contain "surface" + "pattern"). Our scorer instead
+ * rewards titles/descriptions that contain the *exact phrase* or more of the
+ * query's words, so genuinely on-topic niche content floats to the top.
+ */
+export function scoreRelevance(
+  video: Pick<YouTubeVideo, "title" | "description" | "channelTitle">,
+  query: string
+): number {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const phrase = query.toLowerCase().trim();
+  const title = (video.title || "").toLowerCase();
+  const desc = (video.description || "").toLowerCase();
+  const channel = (video.channelTitle || "").toLowerCase();
+
+  let score = 0;
+  // Exact phrase in the title → the strongest signal by far
+  if (phrase.length > 1 && title.includes(phrase)) score += 100;
+  // Each query word found in the title
+  score += tokens.filter((t) => title.includes(t)).length * 20;
+  // Exact phrase in the description
+  if (phrase.length > 1 && desc.includes(phrase)) score += 30;
+  // Each query word found in the description
+  score += tokens.filter((t) => desc.includes(t)).length * 8;
+  // Channel name match (e.g. "Surface Pattern Design Studio")
+  score += tokens.filter((t) => channel.includes(t)).length * 4;
+  return score;
+}
+
+/**
+ * Strict relevance check: keep a video only if at least `min(2, wordCount)`
+ * of the query's words appear in its title/description, or the exact phrase
+ * appears verbatim. Used by the "Strict relevance" toggle to hide videos
+ * that merely tangentially match (e.g. floor-painting for "surface pattern
+ * design").
+ */
+export function matchesStrictRelevance(
+  video: Pick<YouTubeVideo, "title" | "description">,
+  query: string
+): boolean {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const phrase = query.toLowerCase().trim();
+  const haystack = `${(video.title || "").toLowerCase()} ${(video.description || "").toLowerCase()}`;
+
+  if (phrase.length > 1 && haystack.includes(phrase)) return true;
+
+  const matched = new Set(tokens.filter((t) => haystack.includes(t)));
+  return matched.size >= Math.min(2, tokens.length);
 }
 
 /**

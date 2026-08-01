@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Bookmark,
   Heart,
   Loader2,
   ExternalLink,
@@ -10,13 +9,13 @@ import {
   BarChart3,
   TrendingUp,
   Clock,
-  ArrowLeft,
   BookOpen,
   FolderPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import AuthGuard from "@/components/AuthGuard";
+import TopBar from "@/components/TopBar";
 import { listBookmarks, type Bookmark as BookmarkType } from "@/lib/api";
 import { formatCount } from "@/lib/youtube";
 import CollectionPicker from "@/components/CollectionPicker";
@@ -39,7 +38,7 @@ export default function BookmarksPage() {
     try {
       const data = await listBookmarks(pageNum, 20);
       if (!data) {
-        setError("Failed to load bookmarks. Make sure you're logged in.");
+        setError("Failed to load your saved videos. Make sure you're logged in.");
         return;
       }
 
@@ -82,45 +81,32 @@ export default function BookmarksPage() {
         <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-transparent blur-[120px] pointer-events-none" />
 
         <div className="relative z-10">
-          {/* Header */}
-          <header className="border-b border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-3">
-                  <Link
-                    href="/"
-                    className="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="text-sm">Back</span>
-                  </Link>
-                  <div className="w-px h-5 bg-white/[0.06]" />
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-red-500 to-pink-600 shadow-lg shadow-red-500/20">
-                    <Bookmark className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-white tracking-tight">
-                      My Bookmarks
-                    </h1>
-                    <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
-                      Saved videos
-                    </p>
-                  </div>
-                </div>
+          {/* Top Bar */}
+          <TopBar />
 
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+          {/* Main Content */}
+          <main className="px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-7xl mx-auto">
+              {/* Page Title */}
+              <div className="flex items-center gap-3 mb-8">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-pink-600 shadow-lg shadow-red-500/20">
+                  <Heart className="w-4 h-4 text-white fill-white/20" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white tracking-tight">
+                    My Saved
+                  </h1>
+                  <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
+                    Saved videos
+                  </p>
+                </div>
+                <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
                   <Heart className="w-3.5 h-3.5 text-red-400" />
                   <span className="text-xs text-white/50">
                     <strong className="text-white/80">{total}</strong> saved
                   </span>
                 </div>
               </div>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="px-4 sm:px-6 lg:px-8 py-8">
-            <div className="max-w-7xl mx-auto">
               {/* Video lookup — paste a URL to analyze & save */}
               <VideoLookup onBookmarkToggle={() => fetchBookmarks(1)} />
 
@@ -288,9 +274,9 @@ export default function BookmarksPage() {
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-6">
                     <BookOpen className="w-8 h-8 text-white/20" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white/60 mb-3">No bookmarks yet</h3>
+                  <h3 className="text-xl font-semibold text-white/60 mb-3">No saved videos yet</h3>
                   <p className="text-sm text-white/30 max-w-md mx-auto mb-8">
-                    Start saving videos you find interesting! Click the heart icon on any video to bookmark it.
+                    Start saving videos you find interesting! Click the heart icon on any video to save it.
                   </p>
                   <Link
                     href="/"

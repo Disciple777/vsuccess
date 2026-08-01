@@ -42,7 +42,7 @@ Built with **Next.js 16** and **React 19**, deployed seamlessly on **Vercel**.
 - **Like count** — Hearts icon showing total likes
 - **Comment count** — Message icon showing total comments
 - **Engagement rate** — Percentage-based engagement score ((likes + comments) / views × 100)
-- **Engagement label** — Color-coded badges (🔥 Viral, 💥 High, 📈 Good, 👍 Solid, 👀 Average)
+- **Engagement label** — Color-coded badges (🔥 Hooked, 💥 High, 📈 Good, 👍 Solid, 👀 Average)
 
   **How engagement rate is calculated:**
 
@@ -59,7 +59,7 @@ Built with **Next.js 16** and **React 19**, deployed seamlessly on **Vercel**.
 
   | Badge | Rate | Meaning |
   |-------|------|---------|
-  | 🔥 **Viral** | > 10% | Insane engagement — the video is truly popping off relative to its views |
+  | 🔥 **Hooked** | > 10% | Insane engagement — the video is truly popping off relative to its views |
   | 💥 **High** | > 5% | Really strong engagement — people are loving it |
   | 📈 **Good** | > 2% | Solid engagement, well above average |
   | 👍 **Solid** | > 1% | Decent engagement, around the YouTube average |

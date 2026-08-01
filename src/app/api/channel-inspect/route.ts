@@ -152,7 +152,7 @@ async function fetchYouTubeJSON(endpoint: string, params: Record<string, string>
 // ── Shared helpers ────────────────────────────────────────────────
 
 function parseISODuration(iso: string): number {
-  const m = iso.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/);
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
   return (parseInt(m[1] || "0", 10) * 3600) +
          (parseInt(m[2] || "0", 10) * 60) +

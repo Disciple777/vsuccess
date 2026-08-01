@@ -9,7 +9,6 @@ import {
   Link2,
   MessageCircle,
   Clock,
-  ArrowLeft,
   Loader2,
   UserMinus,
   UserPlus,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
+import TopBar from "@/components/TopBar";
 import FollowButton from "@/components/FollowButton";
 import { listFollowedChannels, unfollowChannel, type FollowedChannel } from "@/lib/api";
 import { formatCount, type ChannelLookupResult } from "@/lib/youtube";
@@ -155,16 +155,15 @@ function FollowingContent() {
       <div className="fixed top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent blur-[120px] pointer-events-none" />
       <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-transparent blur-[120px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Link
-            href="/"
-            className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10
-                       border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300"
-          >
-            <ArrowLeft className="w-4 h-4 text-white/50" />
-          </Link>
+      <div className="relative z-10">
+        {/* Top Bar */}
+        <TopBar />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Title */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20">
+            <Users className="w-4 h-4 text-white" />
+          </div>
           <div>
             <h1 className="text-xl font-bold text-white">Following</h1>
             <p className="text-sm text-white/40">Channels you follow</p>
@@ -500,6 +499,7 @@ function FollowingContent() {
             </Link>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

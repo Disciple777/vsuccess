@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   const subscriberLimit = subscriberLimitParam ? parseInt(subscriberLimitParam, 10) : undefined;
   const maxChannelAgeParam = searchParams.get("maxChannelAge");
   const maxChannelAgeMonths = maxChannelAgeParam ? parseInt(maxChannelAgeParam, 10) : undefined;
+  const sort = searchParams.get("sort") === "views" ? "views" : "relevance";
+  const strict = searchParams.get("strict") === "true";
 
   if (!niche) {
     return NextResponse.json(
@@ -31,11 +33,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await searchViralVideos(niche, interval, 20, apiKey, videoType, pageToken, subscriberLimit, maxChannelAgeMonths);
+    const result = await searchViralVideos(niche, interval, 20, apiKey, videoType, pageToken, subscriberLimit, maxChannelAgeMonths, sort, strict);
     return NextResponse.json({
       niche,
       interval,
       videoType,
+      sort,
+      strict,
       count: result.videos.length,
       videos: result.videos,
       nextPageToken: result.nextPageToken,

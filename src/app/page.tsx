@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import {
   Search,
   Clapperboard,
@@ -22,26 +22,27 @@ import {
   Monitor,
   Users,
   Calendar,
-  LogIn,
-  LogOut,
-  Bookmark,
-  FolderOpen,
-  Heart,
+  Eye,
+  Filter,
+  ArrowUpDown,
+  MousePointerClick,
 } from "lucide-react";
 import VideoCard from "@/components/VideoCard";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
+import HelpTip from "@/components/HelpTip";
+import TopBar from "@/components/TopBar";
 import type { YouTubeVideo } from "@/lib/youtube";
 import { formatCount } from "@/lib/youtube";
-import { useAuth } from "@/context/AuthContext";
 import { useSearchQuota } from "@/hooks/useSearchQuota";
 import { useFollowedChannelIds } from "@/hooks/useFollowedChannelIds";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import { checkBookmarks } from "@/lib/api";
-import Link from "next/link";
 
 type Interval = "24h" | "7d" | "30d";
 type Platform = "youtube" | "tiktok" | "instagram";
 type VideoType = "all" | "short" | "long";
+type SortMode = "relevance" | "views";
+type ResultsSort = "original" | "date" | "views" | "outlier" | "engagement";
 
 interface ApiResponse {
   niche: string;
@@ -59,6 +60,20 @@ const VIDEO_TYPES: { value: VideoType; label: string; icon: typeof Smartphone; d
   { value: "all", label: "All Types", icon: Film, description: "All video durations" },
   { value: "short", label: "Shorts", icon: Smartphone, description: "Videos under 4 minutes" },
   { value: "long", label: "Long Form", icon: Monitor, description: "Videos over 4 minutes" },
+];
+
+const SORT_OPTIONS: { value: SortMode; label: string; icon: typeof ArrowUpDown; description: string }[] = [
+  { value: "views", label: "Views", icon: TrendingUp, description: "Most-viewed videos first" },
+  { value: "relevance", label: "Relevance", icon: MousePointerClick, description: "Best-matched results first (YouTube's own ranking)" },
+];
+
+// Client-side sort options for the results box (re-sorts the already-loaded videos)
+const RESULT_SORT_OPTIONS: { value: ResultsSort; label: string; icon: typeof ArrowUpDown }[] = [
+  { value: "original", label: "Original", icon: MousePointerClick },
+  { value: "date", label: "Date", icon: Calendar },
+  { value: "views", label: "Views", icon: Eye },
+  { value: "outlier", label: "Outlier", icon: TrendingUp },
+  { value: "engagement", label: "Engagement", icon: BarChart3 },
 ];
 
 const INTERVALS: { value: Interval; label: string; icon: typeof Clock }[] = [
@@ -89,13 +104,15 @@ export default function Home() {
   const [niche, setNiche] = useState("");
   const [interval, setInterval] = useState<Interval>("7d");
   const [videoType, setVideoType] = useState<VideoType>("all");
+  const [sort, setSort] = useState<SortMode>("views");
+  const [resultsSort, setResultsSort] = useState<ResultsSort>("original");
+  const [strict, setStrict] = useState(false);
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [apiKey, setApiKey] = useState("");
   const [maxSubscribers, setMaxSubscribers] = useState("");
   const [maxChannelAge, setMaxChannelAge] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
-  const { user: authUser, loading: authLoading, logout } = useAuth();
   const { followedChannelIds, toggleFollowedChannel } = useFollowedChannelIds();
   const {
     remaining: quotaRemaining,
@@ -133,7 +150,11 @@ export default function Home() {
         interval,
         videoType,
         platform,
+        sort,
       });
+      if (strict) {
+        params.set("strict", "true");
+      }
       if (apiKey.trim()) {
         params.set("apiKey", apiKey.trim());
       }
@@ -186,7 +207,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [niche, interval, videoType, platform, apiKey, maxSubscribers, maxChannelAge, quotaTrackSearch]);
+  }, [niche, interval, videoType, platform, sort, strict, apiKey, maxSubscribers, maxChannelAge, quotaTrackSearch]);
 
   const handleLoadMore = useCallback(async () => {
     if (!nextPageToken || loadingMore) return;
@@ -199,8 +220,12 @@ export default function Home() {
         interval,
         videoType,
         platform,
+        sort,
         pageToken: nextPageToken,
       });
+      if (strict) {
+        params.set("strict", "true");
+      }
       if (apiKey.trim()) {
         params.set("apiKey", apiKey.trim());
       }
@@ -245,11 +270,32 @@ export default function Home() {
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, apiKey, videos, maxSubscribers, maxChannelAge]);
+  }, [nextPageToken, loadingMore, niche, interval, videoType, platform, sort, strict, apiKey, videos, maxSubscribers, maxChannelAge]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
   };
+
+  // Client-side sorting of the currently loaded results. "original" preserves
+  // the order the server returned (Relevance or Views from the top toggle).
+  const sortedVideos = useMemo(() => {
+    if (resultsSort === "original") return videos;
+    const sorted = [...videos];
+    switch (resultsSort) {
+      case "date":
+        return sorted.sort(
+          (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+        );
+      case "views":
+        return sorted.sort((a, b) => b.viewCount - a.viewCount);
+      case "outlier":
+        return sorted.sort((a, b) => b.outlierMultiplier - a.outlierMultiplier);
+      case "engagement":
+        return sorted.sort((a, b) => b.engagementRate - a.engagementRate);
+      default:
+        return videos;
+    }
+  }, [videos, resultsSort]);
 
   return (
     <div className="relative min-h-screen">
@@ -263,115 +309,8 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="relative z-10">
-        {/* Header */}
-        <header className="border-b border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-white tracking-tight">
-                    VSuccess
-                  </h1>
-                  <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
-                    Viral Video Ideas Finder
-                  </p>
-                </div>
-              </div>
-
-              {/* Auth Section */}
-              <div className="flex items-center gap-2">
-                {authLoading ? (
-                  <div className="w-8 h-8 rounded-full shimmer" />
-                ) : authUser ? (
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href="/following"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
-                                 border border-white/[0.06] hover:border-blue-500/30 transition-all duration-300
-                                 text-xs text-white/40 hover:text-blue-400/80"
-                      title="My Followed Channels"
-                    >
-                      <Heart className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Following</span>
-                    </Link>
-                    <Link
-                      href="/bookmarks"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
-                                 border border-white/[0.06] hover:border-red-500/30 transition-all duration-300
-                                 text-xs text-white/40 hover:text-red-400/80 group"
-                      title="My Bookmarks"
-                    >
-                      <Bookmark className="w-3.5 h-3.5 transition-all duration-300 group-hover:fill-red-400/30" />
-                      <span className="hidden sm:inline">Bookmarks</span>
-                    </Link>
-                    <Link
-                      href="/collections"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
-                                 border border-white/[0.06] hover:border-purple-500/30 transition-all duration-300
-                                 text-xs text-white/40 hover:text-purple-400/80"
-                      title="My Collections"
-                    >
-                      <FolderOpen className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Collections</span>
-                    </Link>
-                    <button
-                      onClick={logout}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
-                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
-                                 text-xs text-white/40 hover:text-white/70"
-                      title="Sign out"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Sign out</span>
-                    </button>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/[0.08]">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-500/40 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-white/80">
-                          {(authUser.name || authUser.email).charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <span className="text-xs text-white/60 hidden sm:block max-w-[120px] truncate">
-                        {authUser.name || authUser.email}
-                      </span>
-                      {authUser.tier === "paid" && (
-                        <span className="text-[10px] font-medium text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                          PRO
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <Link
-                      href="/auth/login"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
-                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
-                                 text-xs text-white/50 hover:text-white/80"
-                    >
-                      <LogIn className="w-3.5 h-3.5" />
-                      <span>Sign in</span>
-                    </Link>
-                    {/* API Key button commented out — key is set in .env.local */}
-                    {/*
-                    <button
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 
-                                 border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300
-                                 text-xs text-white/50 hover:text-white/80"
-                    >
-                      <Key className="w-3.5 h-3.5" />
-                      <span>API Key</span>
-                    </button>
-                    */}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </header>
+        {/* Top Bar */}
+        <TopBar />
 
         {/* Hero Section */}
         <section className="pt-20 pb-12 px-4 sm:px-6 lg:px-8">
@@ -381,17 +320,17 @@ export default function Home() {
                           border border-white/[0.08] mb-6 animate-fade-in">
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-xs font-medium text-white/60">
-                AI-Powered Viral Content Discovery
+                Viral Content Discovery
               </span>
             </div>
 
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-4 animate-fade-in-up">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-4 animate-fade-in-up">
               Find What&apos;s{" "}
               <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
                 Popping
               </span>{" "}
               in Your Niche
-            </h2>
+            </h1>
 
             <p className="text-lg text-white/50 max-w-2xl mx-auto mb-10 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
               Enter any niche — from fitness to finance — and instantly discover 
@@ -576,6 +515,65 @@ export default function Home() {
 
               <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
 
+              {/* Sort Selector */}
+              <div className="flex items-center gap-1">
+                <ArrowUpDown className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
+                <div className="flex gap-0.5">
+                  {SORT_OPTIONS.map((so) => {
+                    const Icon = so.icon;
+                    return (
+                      <button
+                        key={so.value}
+                        onClick={() => setSort(so.value)}
+                        title={so.description}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap
+                          ${sort === so.value
+                            ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                            : "text-white/30 border border-transparent hover:text-white/50"
+                          }
+                        `}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{so.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <HelpTip
+                  align="right"
+                  text={"Views — most-watched videos first.\nRelevance — YouTube's best-matched results first, softly re-ranked so videos containing your exact niche phrase float to the top."}
+                />
+              </div>
+
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
+
+              {/* Strict Relevance Toggle */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setStrict(!strict)}
+                  title={strict
+                    ? "Strict relevance ON — only showing videos that clearly match your niche"
+                    : "Strict relevance OFF — showing best-matched videos first (soft re-rank)"}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap border
+                    ${strict
+                      ? "bg-amber-500/10 text-amber-300 border-amber-400/30"
+                      : "text-white/30 border-transparent hover:text-white/50"
+                    }`}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>Strict</span>
+                  <span className={`text-[9px] font-normal ${strict ? "text-amber-400/70" : "text-white/20"}`}>
+                    {strict ? "ON" : "OFF"}
+                  </span>
+                </button>
+                <HelpTip
+                  align="right"
+                  text={"Strict OFF — everything is shown; best-matching videos are promoted to the top (soft re-rank).\n\nStrict ON — videos that don't clearly match your niche are hidden entirely (must contain your exact phrase or at least 2 of your search words)."}
+                />
+              </div>
+
+              <div className="w-px h-5 bg-white/[0.06] hidden md:block" />
+
               {/* Subscriber Limit Filter */}
               <div className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-white/30 flex-shrink-0 hidden sm:block" />
@@ -715,11 +713,57 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Results Sort Box — re-sorts the already-loaded videos (client-side) */}
+              {videos.length > 0 && (
+                <div className="mb-6 animate-fade-in">
+                  <div className="flex flex-wrap items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                    {/* Sort buttons */}
+                    <div className="flex items-center gap-1.5">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
+                      <div className="flex gap-0.5">
+                        {RESULT_SORT_OPTIONS.map((opt) => {
+                          const Icon = opt.icon;
+                          return (
+                            <button
+                              key={opt.value}
+                              onClick={() => setResultsSort(opt.value)}
+                              title={
+                                opt.value === "original"
+                                  ? "Preserve the order from the Relevance / Views toggle"
+                                  : `Sort by ${opt.label.toLowerCase()}`
+                              }
+                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 whitespace-nowrap cursor-pointer
+                                ${resultsSort === opt.value
+                                  ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                                  : "text-white/30 border border-transparent hover:text-white/50"
+                                }
+                              `}
+                            >
+                              <Icon className="w-3 h-3" />
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="w-px h-5 bg-white/[0.06] hidden sm:block" />
+
+                    {/* Count badge */}
+                    <div className="ml-auto">
+                      <span className="text-[11px] text-white/30">
+                        {sortedVideos.length} of {videos.length} videos
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Video Grid */}
               {videos.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {videos.map((video, i) => (
+                    {sortedVideos.map((video, i) => (
                       <div
                         key={video.id}
                         className="animate-fade-in-up"

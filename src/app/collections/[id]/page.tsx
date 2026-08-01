@@ -6,7 +6,6 @@ import {
   ExternalLink,
   Eye,
   Clock,
-  ArrowLeft,
   Loader2,
   Trash2,
   Edit3,
@@ -16,6 +15,7 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AuthGuard from "@/components/AuthGuard";
+import TopBar from "@/components/TopBar";
 import {
   getCollectionDetail,
   updateCollection,
@@ -150,38 +150,42 @@ export default function CollectionDetailPage() {
         <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent blur-[120px] pointer-events-none" />
 
         <div className="relative z-10">
-          {/* Header */}
-          <header className="border-b border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-3">
-                  <Link
-                    href="/collections"
-                    className="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="text-sm">Collections</span>
-                  </Link>
-                  <div className="w-px h-5 bg-white/[0.06]" />
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg shadow-purple-500/20">
-                    <FolderOpen className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    {collection && (
-                      <>
-                        <h1 className="text-lg font-bold text-white tracking-tight truncate max-w-[200px] sm:max-w-[400px]">
-                          {collection.name}
-                        </h1>
-                        <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
-                          {data?.total || 0} video{(data?.total || 0) !== 1 ? "s" : ""}
-                        </p>
-                      </>
-                    )}
-                  </div>
+          {/* Top Bar */}
+          <TopBar />
+
+          {/* Main */}
+          <main className="px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-7xl mx-auto">
+              {/* Page Title */}
+              <div className="flex items-center gap-3 mb-8">
+                <Link
+                  href="/collections"
+                  className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10
+                             border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300"
+                  title="Back to collections"
+                >
+                  <svg className="w-4 h-4 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </Link>
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg shadow-purple-500/20">
+                  <FolderOpen className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  {collection && (
+                    <>
+                      <h1 className="text-xl font-bold text-white tracking-tight truncate max-w-[200px] sm:max-w-[400px]">
+                        {collection.name}
+                      </h1>
+                      <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
+                        {data?.total || 0} video{(data?.total || 0) !== 1 ? "s" : ""}
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 {collection && (
-                  <div className="flex items-center gap-2">
+                  <div className="ml-auto flex items-center gap-2">
                     <button
                       onClick={handleStartEdit}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10
@@ -202,12 +206,6 @@ export default function CollectionDetailPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </header>
-
-          {/* Main */}
-          <main className="px-4 sm:px-6 lg:px-8 py-8">
-            <div className="max-w-7xl mx-auto">
               {/* Video lookup — paste a URL to analyze & add directly to this collection */}
               <VideoLookup
                 quickAddCollectionId={collectionId}
@@ -420,7 +418,7 @@ export default function CollectionDetailPage() {
                     This collection is empty
                   </h3>
                   <p className="text-sm text-white/30 max-w-md mx-auto mb-8">
-                    Add some bookmarked videos to this collection from the bookmarks page or the search results.
+                    Add some saved videos to this collection from the Saved page or the search results.
                   </p>
                   <Link
                     href="/bookmarks"
@@ -430,7 +428,7 @@ export default function CollectionDetailPage() {
                              transition-all duration-300 shadow-lg shadow-purple-500/20"
                   >
                     <Bookmark className="w-4 h-4" />
-                    <span>Go to Bookmarks</span>
+                    <span>Go to Saved</span>
                   </Link>
                 </div>
               )}

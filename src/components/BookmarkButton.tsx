@@ -128,7 +128,7 @@ export default function BookmarkButton({
                 : "bg-black/40 backdrop-blur-sm border border-white/[0.08] hover:bg-white/15 group-hover:border-white/[0.15]"
             }
           `}
-          title={bookmarked ? "Remove bookmark" : "Save bookmark"}
+          title={bookmarked ? "Remove from saved" : "Save video"}
         >
           <Heart
             className={`w-3.5 h-3.5 transition-all duration-300 ${

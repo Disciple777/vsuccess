@@ -6,7 +6,6 @@ import {
   FolderOpen,
   Plus,
   Loader2,
-  ArrowLeft,
   TrendingUp,
   Trash2,
   Edit3,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
+import TopBar from "@/components/TopBar";
 import {
   listCollections,
   createCollection,
@@ -138,35 +138,28 @@ export default function CollectionsPage() {
         <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent blur-[120px] pointer-events-none" />
 
         <div className="relative z-10">
-          {/* Header */}
-          <header className="border-b border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between h-16">
-                <div className="flex items-center gap-3">
-                  <Link
-                    href="/"
-                    className="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="text-sm">Back</span>
-                  </Link>
-                  <div className="w-px h-5 bg-white/[0.06]" />
-                  <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg shadow-purple-500/20">
-                    <FolderOpen className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-white tracking-tight">
-                      My Collections
-                    </h1>
-                    <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
-                      Organize your bookmarks
-                    </p>
-                  </div>
-                </div>
+          {/* Top Bar */}
+          <TopBar />
 
+          {/* Main */}
+          <main className="px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-4xl mx-auto">
+              {/* Page Title */}
+              <div className="flex items-center gap-3 mb-8">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg shadow-purple-500/20">
+                  <FolderOpen className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white tracking-tight">
+                    My Collections
+                  </h1>
+                  <p className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
+                    Organize your saved videos
+                  </p>
+                </div>
                 <button
                   onClick={() => setShowCreate(!showCreate)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600
+                  className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600
                            hover:from-purple-400 hover:to-pink-500 text-white font-medium text-xs
                            transition-all duration-300 shadow-lg shadow-purple-500/20"
                 >
@@ -174,12 +167,6 @@ export default function CollectionsPage() {
                   <span className="hidden sm:inline">New Collection</span>
                 </button>
               </div>
-            </div>
-          </header>
-
-          {/* Main */}
-          <main className="px-4 sm:px-6 lg:px-8 py-8">
-            <div className="max-w-4xl mx-auto">
               {/* Video lookup — paste a URL to analyze & save */}
               <VideoLookup />
 
@@ -405,7 +392,7 @@ export default function CollectionsPage() {
                     No collections yet
                   </h3>
                   <p className="text-sm text-white/30 max-w-md mx-auto mb-8">
-                    Create collections to organize your bookmarked videos by topic,
+                    Create collections to organize your saved videos by topic,
                     project, or any way you like.
                   </p>
                   <button
